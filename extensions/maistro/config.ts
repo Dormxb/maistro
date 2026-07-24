@@ -4,23 +4,26 @@ import { join, resolve } from "node:path";
 import type { MaistroConfig } from "./types.ts";
 
 const DEFAULT_CONFIG: MaistroConfig = {
-  version: "8.1",
-  orchestrator: { provider: "anthropic", model: "claude-fable-5" },
+  version: "8.2",
+  orchestrator: { provider: "deepseek", model: "deepseek-v4-flash" },
   agents: {
     architect: {
       provider: "anthropic",
       model: "claude-fable-5",
       tools: ["read", "grep", "find", "ls"],
+      tierPreference: "upgrade",
     },
     executor: {
       provider: "xai",
       model: "grok-4.5",
       tools: ["read", "grep", "find", "ls", "write", "edit"],
+      tierPreference: "baseline",
     },
     challenger: {
       provider: "openai",
       model: "gpt-5.6-sol",
       tools: ["read", "grep", "find", "ls"],
+      tierPreference: "upgrade",
     },
   },
   verification: {
@@ -30,10 +33,25 @@ const DEFAULT_CONFIG: MaistroConfig = {
     hostProjectTestExecution: false,
   },
   modes: {
-    classifier: { enabled: true },
+    classifier: { enabled: true, model: "deepseek/deepseek-v4-flash" },
     review: { enabled: true },
     pipeline: { enabled: false, confirmBeforeRun: true },
     debate: { enabled: false, confirmBeforeRun: true },
+  },
+  routing: {
+    enabled: true,
+    preferUpgrade: true,
+    budgetAwareDowngrade: true,
+  },
+  agentTools: {
+    stateCachePath: "~/.maistro/agent-tool-state.json",
+    providers: {
+      "pi-session": { enabled: true },
+      "claude-cli": { enabled: true },
+      "codex-cli": { enabled: true },
+      "agy-cli": { enabled: true },
+      "kimi-cli": { enabled: true },
+    },
   },
   cost: {
     monthlyBudget: 50,
@@ -81,6 +99,12 @@ export function loadConfig(cwd = process.cwd()): MaistroConfig {
     agents: { ...DEFAULT_CONFIG.agents, ...(parsed.agents || {}) },
     verification: { ...DEFAULT_CONFIG.verification, ...(parsed.verification || {}) },
     modes: { ...DEFAULT_CONFIG.modes, ...(parsed.modes || {}) },
+    routing: { ...DEFAULT_CONFIG.routing, ...(parsed.routing || {}) },
+    agentTools: {
+      ...DEFAULT_CONFIG.agentTools,
+      ...(parsed.agentTools || {}),
+      providers: { ...DEFAULT_CONFIG.agentTools?.providers, ...(parsed.agentTools?.providers || {}) },
+    },
     cost: { ...DEFAULT_CONFIG.cost, ...(parsed.cost || {}) },
     security: { ...DEFAULT_CONFIG.security, ...(parsed.security || {}) },
     orchestrator: { ...DEFAULT_CONFIG.orchestrator, ...(parsed.orchestrator || {}) },
