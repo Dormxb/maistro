@@ -286,8 +286,9 @@ export class AgentPool {
     let result = await route.tool.execute(execOpts);
 
     // On failure with error category: report to registry, retry if upgrade→baseline makes sense.
-    if (!result.success && result.errorCategory) {
-      registry.reportExecuteError(route.tool.id, result.errorCategory, result.error?.message);
+    if (!result.success) {
+      const category = result.errorCategory || "other";
+      registry.reportExecuteError(route.tool.id, category, result.error?.message);
 
       // If we were in upgrade pool, retry with baseline.
       if (route.pool === "upgrade") {

@@ -46,6 +46,15 @@ export function acquireWriteSession(projectRoot: string, taskId: string): WriteS
 
   git(root, ["worktree", "add", "-b", branch, worktreePath, baseCommit]);
 
+  // Block .maistro-session.json from appearing in diffs.
+  const gitignorePath = join(worktreePath, ".gitignore");
+  try {
+    const existing = existsSync(gitignorePath) ? require("node:fs").readFileSync(gitignorePath, "utf8") : "";
+    if (!existing.includes(".maistro-session.json")) {
+      writeFileSync(gitignorePath, (existing ? existing + "\n" : "") + ".maistro-session.json\n");
+    }
+  } catch { /* best effort */ }
+
   // mark
   writeFileSync(
     join(worktreePath, ".maistro-session.json"),

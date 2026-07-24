@@ -7,9 +7,9 @@
 
 import { execFile } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { platform, buildCandidates } from "../../platform.ts";
 import type {
   AgentToolProvider,
   ExecuteOpts,
@@ -22,15 +22,24 @@ const execFileAsync = promisify(execFile);
 
 // ── Shared CLI helpers ───────────────────────────────────────────────
 
-/** Find a binary: absolute candidates first, then async PATH lookup. */
-async function findBinary(candidates: string[]): Promise<string | undefined> {
-  const p = platform();
+/** Find a binary: absolute candidates first, then PATH. */
+function findBinary(candidates: string[]): string | undefined {
   for (const c of candidates) {
     if (c.includes("/") || c.includes("\\")) {
       if (existsSync(c)) return c;
     } else {
-      const found = await p.which(c);
-      if (found) return found;
+      // PATH lookup via `where` on Windows, `which` on Unix.
+      try {
+        const result = require("node:child_process").execFileSync(
+          process.platform === "win32" ? "where" : "which",
+          [c],
+          { encoding: "utf8", windowsHide: true, timeout: 5000 },
+        );
+        const first = result.trim().split(/\r?\n/)[0];
+        if (first && existsSync(first)) return first;
+      } catch {
+        /* not found */
+      }
     }
   }
   return undefined;
@@ -113,8 +122,8 @@ abstract class CliTool implements AgentToolProvider {
   private _fingerprint?: string;
 
   async probe(): Promise<ProbeResult> {
-    // 1. Find binary (async — uses platform.which).
-    const bin = await findBinary(this.binaryCandidates);
+    // 1. Find binary.
+    const bin = findBinary(this.binaryCandidates);
     if (!bin) {
       this.status = "unavailable";
       this.statusSince = new Date();
@@ -143,7 +152,7 @@ abstract class CliTool implements AgentToolProvider {
   }
 
   async execute(opts: ExecuteOpts): Promise<ExecuteResult> {
-    const bin = this._binaryPath || await findBinary(this.binaryCandidates);
+    const bin = this._binaryPath || findBinary(this.binaryCandidates);
     if (!bin) {
       return {
         success: false,
@@ -166,7 +175,7 @@ abstract class CliTool implements AgentToolProvider {
       };
     } catch (e: any) {
       const stderr = String(e?.stderr || e?.message || "");
-      const category = categorizeStderr(stderr);
+      const category = categorizeStderr(stderr) || "other";
       return {
         success: false,
         error: e,
@@ -191,7 +200,8 @@ export class ClaudeCliTool extends CliTool {
   models = ["claude-fable-5", "claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"];
 
   protected binaryCandidates = [
-    ...platform().defaultPaths.claude,
+    join(homedir(), ".local", "bin", "claude.exe"),
+    "C:\\Users\\JMAAT001\\.local\\bin\\claude.exe",
     "claude",
   ];
 
@@ -234,7 +244,7 @@ export class CodexCliTool extends CliTool {
   models = ["gpt-5.6-sol", "gpt-5", "gpt-5-fast"];
 
   protected binaryCandidates = [
-    ...platform().defaultPaths.codex,
+    "C:\\Users\\JMAAT001\\AppData\\Local\\OpenAI\\Codex\\bin\\codex.exe",
     "codex",
   ];
 
@@ -276,9 +286,7 @@ export class AgyCliTool extends CliTool {
   label = "Agy CLI";
   models = ["antigravity-default"];
 
-  protected binaryCandidates = [
-    ...platform().defaultPaths.agy,
-  ];
+  protected binaryCandidates = ["agy"];
 
   protected async run(
     bin: string,
@@ -298,6 +306,10 @@ export class AgyCliTool extends CliTool {
 
 // ── KimiCliTool ───────────────────────────────────────────────────────
 
+function windowsHome(): string {
+  return process.env.USERPROFILE || process.env.HOME || homedir();
+}
+
 export class KimiCliTool extends CliTool {
   id = "kimi-cli";
   provider = "moonshot";
@@ -305,7 +317,9 @@ export class KimiCliTool extends CliTool {
   models = ["kimi-default"];
 
   protected binaryCandidates = [
-    ...platform().defaultPaths.kimi,
+    join(windowsHome(), ".kimi-code", "bin", "kimi.exe"),
+    join(windowsHome(), ".kimi-code", "kimi.exe"),
+    "C:\\Users\\JMAAT001\\.kimi-code\\bin\\kimi.exe",
     "kimi-code",
     "kimi",
   ];
