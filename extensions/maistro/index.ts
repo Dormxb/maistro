@@ -20,6 +20,7 @@ import { runDebate } from "./debate.ts";
 import { appendMemory, listMemory, searchMemory } from "./memory.ts";
 import { buildStats, renderStatsText } from "./stats.ts";
 import { loadAllRecords, renderSummaryText, sessionRecords } from "./token-stats.ts";
+import { addTodo, updateTodo, listTodos, renderWidget } from "./todo.ts";
 
 const writeSessions = new Map<string, WriteSession>();
 
@@ -683,6 +684,74 @@ export default function (pi: ExtensionAPI) {
       };
     },
   });
+
+  // P8.2: TODO tools — non-intrusive task tracking.
+  pi.registerTool({
+    name: "maistro_todo_add",
+    label: "Maistro Todo Add",
+    description: "Add a TODO item to track progress on a task. Use this to break down complex work without interrupting the user.",
+    parameters: Type.Object({
+      taskId: Type.String({ description: "Task id to attach the TODO to" }),
+      text: Type.String({ description: "TODO item description" }),
+    }),
+    async execute(_id, params) {
+      const item = addTodo(cwd, params.taskId, params.text);
+      updateWidget(pi, cwd);
+      return { content: [{ type: "text", text: `Added TODO #${item.id}: ${item.text}` }] };
+    },
+  });
+
+  pi.registerTool({
+    name: "maistro_todo_update",
+    label: "Maistro Todo Update",
+    description: "Update a TODO item status (pending, in_progress, done, cancelled). Mark items done as you complete them.",
+    parameters: Type.Object({
+      taskId: Type.String({ description: "Task id" }),
+      id: Type.String({ description: "TODO item id" }),
+      status: Type.String({ description: "New status: pending, in_progress, done, or cancelled" }),
+    }),
+    async execute(_id, params) {
+      const item = updateTodo(cwd, params.taskId, params.id, params.status as any);
+      updateWidget(pi, cwd);
+      if (!item) return { content: [{ type: "text", text: `TODO #${params.id} not found` }], isError: true };
+      return { content: [{ type: "text", text: `Updated TODO #${item.id}: ${item.status} — ${item.text}` }] };
+    },
+  });
+
+  pi.registerTool({
+    name: "maistro_todo_list",
+    label: "Maistro Todo List",
+    description: "List all TODO items for a task. Use before starting work to review what needs to be done.",
+    parameters: Type.Object({
+      taskId: Type.Optional(Type.String({ description: "Task id (omit for all active)" })),
+    }),
+    async execute(_id, params) {
+      const taskId = params.taskId || "all";
+      let text: string;
+      if (params.taskId) {
+        const list = listTodos(cwd, params.taskId);
+        text = list.items.length === 0
+          ? `No TODOs for ${params.taskId}`
+          : list.items.map((i) => `${i.status === "done" ? "✅" : i.status === "in_progress" ? "🔄" : "⬜"} #${i.id} ${i.text}`).join("\n");
+      } else {
+        const todos = (await import("./todo.ts")).allActiveTodos(cwd);
+        text = todos.length === 0
+          ? "No active TODOs"
+          : todos.map((i) => `🔄 #${i.id} ${i.text}`).join("\n");
+      }
+      return { content: [{ type: "text", text }] };
+    },
+  });
+
+  // Widget helper
+  function updateWidget(pi: any, cwd: string) {
+    try {
+      const lines = renderWidget(cwd);
+      if (lines.length > 0) {
+        pi.setWidget?.("maistro-todo", lines);
+      }
+    } catch { /* widget not supported in all modes */ }
+  }
 
   pi.on("session_start", async () => {
     try {
