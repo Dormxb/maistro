@@ -6,6 +6,7 @@
  */
 
 import { homedir } from "node:os";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { platform } from "../../platform.ts";
 import type {
@@ -20,38 +21,57 @@ import type {
 // P7: pi module path — resolved from ExtensionAPI at startup, no hardcoded paths.
 let _piEntry: string;
 
+function findExisting(candidates: string[]): string {
+  for (const c of candidates) {
+    const path = c.replace(/^file:\/\/\/?/, "").replace(/^file:/, "");
+    if (existsSync(path)) return c;
+  }
+  return candidates[0];
+}
+
 export function initPiEntry(ext: any): void {
-  // Pi ExtensionAPI exposes its own module resolution.
-  // Fallback to common install locations if not available.
-  _piEntry =
+  // Pi ExtensionAPI may expose module resolution.
+  const fromApi =
     ext?.resolvePath?.("@earendil-works/pi-coding-agent") ||
-    ext?.resolvePath?.("pi-coding-agent") ||
-    (() => {
-      const home = platform().homeDir;
-      if (process.platform === "win32") {
-        // Scoop / manual install locations on Windows
-        const candidates = [
-          `${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-          `${home}/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-        ];
-        for (const c of candidates) {
-          try { require("fs").accessSync(c.replace("file:///", "")); return `file:///${c}`; } catch {}
-        }
-      }
-      // macOS / Linux
-      return `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
-    })();
+    ext?.resolvePath?.("pi-coding-agent");
+
+  const home = platform().homeDir;
+  const candidates: string[] = [];
+
+  if (process.platform === "win32") {
+    candidates.push(
+      `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+      `file:///${home}/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+    );
+  } else {
+    candidates.push(
+      `file:///usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+      `file:///opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+      `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+    );
+  }
+
+  _piEntry = fromApi || findExisting(candidates);
 }
 
 export function getPiEntry(): string {
   if (!_piEntry) {
-    // Lazy init if initPiEntry wasn't called.
+    // initPiEntry wasn't called — use lazy discovery.
     const home = process.env.USERPROFILE || process.env.HOME || "";
+    const candidates: string[] = [];
     if (process.platform === "win32") {
-      _piEntry = `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
+      candidates.push(
+        `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+        `file:///${home}/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+      );
     } else {
-      _piEntry = `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
+      candidates.push(
+        `file:///usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+        `file:///opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+        `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+      );
     }
+    _piEntry = findExisting(candidates);
   }
   return _piEntry;
 }
