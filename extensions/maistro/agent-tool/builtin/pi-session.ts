@@ -18,46 +18,46 @@ import type {
   ProviderClass,
 } from "../types.ts";
 
-// P7: pi module path — resolved from import.meta or common install locations.
+// P7: pi module path — resolved from Node module resolution or npm root -g.
 let _piEntry: string;
 
-function findExisting(candidates: string[]): string {
-  for (const c of candidates) {
-    const path = c.replace(/^file:\/\/\/?/, "").replace(/^file:/, "");
-    if (existsSync(path)) return c;
-  }
-  return candidates[0];
-}
-
 export function initPiEntry(_ext?: any): void {
+  // 1. Best: Node 22+ import.meta.resolve (OS-independent).
   try {
-    // Best: Node.js 22+ resolves the package URL directly.
     _piEntry = import.meta.resolve("@earendil-works/pi-coding-agent");
     return;
   } catch {}
 
-  // Fallback: probe common npm global install paths.
-  const home = platform().homeDir;
-  const candidates: string[] = [];
+  // 2. Fallback: npm root -g (works for any Node.js install method: brew, nvm, fnm, official).
+  try {
+    const { execSync } = require("node:child_process") as typeof import("node:child_process");
+    const root = execSync("npm root -g", { encoding: "utf8", timeout: 5000 }).trim();
+    const path = `${root}/@earendil-works/pi-coding-agent/dist/index.js`;
+    if (existsSync(path)) {
+      _piEntry = `file://${path}`;
+      return;
+    }
+  } catch {}
 
-  if (process.platform === "win32") {
-    candidates.push(
-      `file:///${home}/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-      `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-    );
-  } else {
-    candidates.push(
-      `file:///usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-      `file:///opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-      `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-    );
+  // 3. Last resort: hardcoded common paths.
+  const home = platform().homeDir;
+  for (const path of [
+    "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+    "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+    `${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+  ]) {
+    if (existsSync(path)) { _piEntry = `file://${path}`; return; }
   }
 
-  _piEntry = findExisting(candidates);
+  // Give up — will fail later with a clear error.
+  _piEntry = "";
 }
 
 export function getPiEntry(): string {
   if (!_piEntry) initPiEntry();
+  if (!_piEntry) throw new Error(
+    "Cannot find pi module. Please report this with your OS and Node.js install method."
+  );
   return _piEntry;
 }
 
