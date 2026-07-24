@@ -1,5 +1,5 @@
 {
-  "name": "@dormxb/maistro",
+  "name": "@simplesiong/maistro",
   "version": "8.3.0",
   "description": "Multi-model collaborative coding & review for pi — Architect → Executor → Codex → Challenger",
   "keywords": ["pi-package", "multi-agent", "code-review", "maistro"],
