@@ -29,6 +29,7 @@ import {
   getPiEntry,
 } from "./agent-tool/index.ts";
 import type { ExecuteResult, RouteResult } from "./agent-tool/types.ts";
+import { recordCall } from "./token-stats.ts";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -251,6 +252,21 @@ export class AgentPool {
       },
       this.config.cost.ledgerPath,
     );
+
+    // P8: Record token stats for per-model/tool analysis.
+    recordCall({
+      ts: new Date().toISOString(),
+      taskId: params.taskId,
+      role: String(params.role),
+      model: result.model || route.model,
+      tool: route.tool.id,
+      provider: routedProvider,
+      input: inTok,
+      output: outTok,
+      costUsd,
+      pool: route.pool,
+      downgradedFrom: route.downgraded?.from,
+    });
 
     return {
       text: result.text || "",

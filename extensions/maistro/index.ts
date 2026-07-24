@@ -1,7 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { initPlatform } from "./platform.ts";
-import { initPiEntry } from "./agent-tool/builtin/pi-session.ts";
 import { AgentPool } from "./agent-pool.ts";
 import { loadConfig, getProjectRoot } from "./config.ts";
 import { assertBudgetAllows, sumMonthUsd } from "./ledger.ts";
@@ -21,14 +19,11 @@ import { disposeWriteSession as disposeWt } from "./worktree.ts";
 import { runDebate } from "./debate.ts";
 import { appendMemory, listMemory, searchMemory } from "./memory.ts";
 import { buildStats, renderStatsText } from "./stats.ts";
+import { loadAllRecords, renderSummaryText, sessionRecords } from "./token-stats.ts";
 
 const writeSessions = new Map<string, WriteSession>();
 
 export default function (pi: ExtensionAPI) {
-  // P7: Initialize platform and pi module path before anything else.
-  initPlatform();
-  initPiEntry();
-
   const cwd = getProjectRoot(process.cwd());
   let config = loadConfig(cwd);
   let pool = new AgentPool({ cwd, config });
@@ -40,7 +35,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("maistro", {
     description:
-      "Maistro: doctor | status | budget | tasks | stats | discard <id> | cancel <id>",
+      "Maistro: doctor | status | budget | tasks | stats | tokens | discard <id> | cancel <id>",
     handler: async (args, ctx) => {
       const parts = (args || "").trim().split(/\s+/).filter(Boolean);
       const sub = parts[0] || "status";
@@ -177,6 +172,23 @@ export default function (pi: ExtensionAPI) {
           `budget spent=$${spent.toFixed(4)} remaining=$${gate.remaining.toFixed(4)} hardCap=${config.cost.hardCap}`,
           gate.remaining <= 0 ? "error" : "info",
         );
+        return;
+      }
+
+      if (sub === "tokens") {
+        const flag = parts[1];
+        let records = loadAllRecords();
+        let scope = "all time";
+        if (flag && flag !== "--all") {
+          // Filter by taskId
+          records = sessionRecords(flag);
+          scope = `task ${flag}`;
+        }
+        if (records.length === 0) {
+          ctx.ui.notify("No token data recorded yet. Run a task first.", "info");
+          return;
+        }
+        ctx.ui.notify(renderSummaryText(records, scope), "info");
         return;
       }
 
