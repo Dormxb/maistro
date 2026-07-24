@@ -1,8 +1,9 @@
 {
   "name": "@dormxb/maistro",
   "version": "8.3.0",
-  "description": "Multi-model collaborative coding & review for pi — Architect (Fable 5) → Executor (Grok 4.5) → Codex verify → Challenger (Sol)",
+  "description": "Multi-model collaborative coding & review for pi — Architect → Executor → Codex → Challenger",
   "keywords": ["pi-package", "multi-agent", "code-review", "maistro"],
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Dormxb/maistro"
@@ -19,6 +20,8 @@
   },
   "files": [
     "extensions/",
-    "README.md"
+    "skills/",
+    "README.md",
+    "LICENSE"
   ]
 }
