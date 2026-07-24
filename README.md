@@ -1,180 +1,126 @@
-# Maistro
+# 🍸 Maistro
 
-Multi-model collaborative coding & review for [pi](https://github.com/earendil-works/pi-coding-agent).
+> Multi-model collaborative coding & review for [pi](https://github.com/earendil-works/pi-coding-agent)
 
-```
-You give direction → Maistro orchestrates AI models → Codex verifies → You merge
-```
+[![npm](https://img.shields.io/npm/v/@simplesiong/maistro)](https://www.npmjs.com/package/@simplesiong/maistro)
+[![license](https://img.shields.io/npm/l/@simplesiong/maistro)](LICENSE)
+
+---
 
 ## Install
 
 ```bash
-pi install git:github.com/Dormxb/maistro
+pi install npm:@simplesiong/maistro
 ```
 
-Zero config needed — sensible defaults work out of the box. Create `.maistro.jsonc` only for customisation.
+Zero config. Works on **Windows · macOS · Linux**.
 
-## Architecture
+---
+
+## What it does
 
 ```
-┌──────────────────────────────────────────────┐
-│              Task Classifier                  │
-│         (deepseek-v4-flash)                   │
-│   Classifies task → picks workflow           │
-└──────────────────┬───────────────────────────┘
-                   │
-    ┌──────────────┼──────────────────┐
-    ▼              ▼                  ▼
- Architect    Executor          Challenger
- (Fable 5)   (Grok 4.5 /       (GPT-5.6 Sol)
-              DeepSeek V4)      
-    │              │                  │
-    ▼              ▼                  ▼
-┌───────────────────────────────────────────────┐
-│              ModelRouter                       │
-│   baseline (pi models) + upgrade (CLI tools)  │
-│   Auto-selects best available model           │
-└───────────────────────────────────────────────┘
+You: "Add dark mode toggle to settings"
+          │
+          ▼
+   ┌──────────────┐
+   │  Classifier  │  "simple feature → Architect + Executor"
+   └──────┬───────┘
+          │
+   ┌──────▼──────┐   ┌──────────┐   ┌────────────┐
+   │  Architect  │──▶│ Executor │──▶│ Challenger │
+   │  (Fable 5)  │   │(Grok 4.5)│   │ (Sol)      │
+   │  Design     │   │ Write    │   │ Attack     │
+   └─────────────┘   └──────────┘   └────────────┘
+                          │
+                    ┌─────▼─────┐
+                    │   Codex   │
+                    │  Verify   │
+                    └───────────┘
+                          │
+                    ┌─────▼─────┐
+                    │   You     │
+                    │  Merge?   │
+                    └───────────┘
 ```
+
+Four AI models collaborate on your code. Design → Write → Test → Review. You decide what ships.
+
+---
+
+## In action
+
+### `/maistro doctor` — health check
+
+```
+🟢 pi-session     healthy   deepseek-v4-flash, grok-4.5, deepseek-v4-pro
+🟢 claude-cli      healthy   fable-5, opus-4-8, sonnet-5, haiku-4-5
+🟢 codex-cli       healthy   gpt-5.6-sol, gpt-5, gpt-5-fast
+🟢 agy-cli         healthy   antigravity-default
+🟢 kimi-cli        healthy   kimi-default
+```
+
+### `/maistro tokens` — cost histogram
+
+```
+Token Cost by Model
+==============================
+deepseek-v4-flash ████████████░ $0.45
+xai/grok-4.5      ██████░░░░░░░ $0.29
+claude-fable-5    ████░░░░░░░░░ $0.20
+
+Token Cost by Agent Tool
+==============================
+pi-session        ██████████████ $0.74
+claude-cli        ████░░░░░░░░░ $0.20
+```
+
+---
 
 ## Features
 
-### Multi-Agent Pipeline
-- **Architect** — Designs architecture, interfaces, risks
-- **Executor** — Writes code in isolated git worktrees
-- **Challenger** — Adversarial review (finds bugs, security issues)
-- **Codex Verifier** — Runs tests in sandbox (never on your machine)
+| | |
+|---|---|
+| 🔀 **Auto routing** | Picks best model per request. CLI tools auto-detected. |
+| 💚 **Self-healing** | Rate limits? Auto-fallback. Quota resets? Auto-rejoin. |
+| 💰 **Budget guard** | $50/mo hard cap. Auto-downgrades at 80%. |
+| 📋 **TODO tracking** | LLM breaks down work without interrupting you. |
+| 🌍 **Cross-platform** | Windows, macOS, Linux. No config changes. |
 
-### AgentTool Routing
-Automatically discovers available models and selects the best one per request. Six-state health tracking with auto-recovery:
-- `healthy` → `degraded` → `rate_limited` → `quota_exhausted` → `unavailable` → `unknown`
+---
 
-CLI tools (Claude, Codex, Agy, Kimi) auto-detected. Tools that hit rate limits auto-recover when limits reset.
+## Quick start
 
-### Budget Protection
-- $50/month hard cap (configurable)
-- Auto-downgrades to baseline models at 80% spend
-- Token statistics with per-model/per-tool ASCII histograms
+```bash
+# Install
+pi install npm:@simplesiong/maistro
 
-### TODO Tracking
-Non-intrusive task tracking — LLM breaks down complex work into TODOs without interrupting your conversation. Displayed in TUI sidebar.
-
-### Cross-Platform
-Windows, macOS, Linux. Auto-detects platform and resolves binary paths.
-
-## Quick Start
-
-### 1. Check everything is healthy
-
-```
+# Check health
 /maistro doctor
-```
 
-Shows model status and routing configuration.
-
-### 2. Token stats
-
-```
+# View costs
 /maistro tokens
+
+# Run a task — call maistro_orchestrate
 ```
 
-ASCII histogram of cost by model and tool.
+---
 
-### 3. Orchestrate a task
+## Tasks (P0–P8)
 
-Use the `maistro_orchestrate` tool:
-
-```json
-{
-  "taskId": "add-dark-mode",
-  "userGoal": "Add dark mode toggle to settings",
-  "acceptanceCriteria": [
-    "Toggle switches between light and dark themes",
-    "Preference persists across restarts"
-  ],
-  "requiredChecks": ["npm test"]
-}
+```
+P0 ─ Pi API probing          ✅
+P1 ─ Trust Core + guards     ✅
+P2 ─ Triad orchestration     ✅
+P3 ─ Fix loop + recovery     ✅
+P4 ─ Debate + Memory         ✅
+P5 ─ AgentTool plugin routing ✅
+P6 ─ Smoke + config          ✅
+P7 ─ Cross-platform + npm    ✅
+P8 ─ Token stats + TODO      ✅
 ```
 
-The pipeline runs: Architect → Executor → Static Checks → Codex → Challenger.
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `/maistro doctor` | Health check for all models and tools |
-| `/maistro tasks` | List active tasks |
-| `/maistro tokens` | Token cost histogram by model/tool |
-| `/maistro tokens <id>` | Per-task token breakdown |
-| `/maistro stats` | Cost and usage statistics |
-| `/maistro budget` | Budget status |
-| `/maistro discard <id>` | Clean up task worktree |
-| `/maistro cancel <id>` | Cancel running task |
-
-## Tools
-
-| Tool | Description |
-|---|---|
-| `maistro_orchestrate` | Full pipeline: Architect → Executor → Codex → Challenger |
-| `maistro_agent_call` | Single role call (architect/executor/challenger) |
-| `maistro_continue_after_verify` | Re-run challenger after manual verification |
-| `maistro_manual_verify` | Submit external verification results |
-| `maistro_debate` | Multi-perspective debate with blind judge |
-| `maistro_todo_add` | Add TODO item for task tracking |
-| `maistro_todo_update` | Update TODO status |
-| `maistro_todo_list` | List TODOs for a task |
-| `maistro_memory_add` | Save decisions/patterns to project memory |
-| `maistro_memory_search` | Search project memory |
-| `maistro_stats` | Cost/task/debate statistics |
-
-## Configuration
-
-Default config — no `.maistro.jsonc` needed. Customise only if you want:
-
-```jsonc
-{
-  "version": "8.2",
-  "agents": {
-    "architect": {
-      "tools": ["read", "grep", "find", "ls"],
-      "tierPreference": "upgrade"       // Use Claude Fable 5 when available
-    },
-    "executor": {
-      "tools": ["read", "grep", "find", "ls", "write", "edit"],
-      "tierPreference": "baseline"      // Use pi models (grok-4.5 / deepseek-v4)
-    },
-    "challenger": {
-      "tools": ["read", "grep", "find", "ls"],
-      "tierPreference": "upgrade"       // Use GPT-5.6 Sol when available
-    }
-  },
-  "routing": {
-    "enabled": true,
-    "preferUpgrade": true,              // Use CLI tools when healthy
-    "budgetAwareDowngrade": true        // Auto-switch to cheaper models at 80%
-  },
-  "cost": {
-    "monthlyBudget": 50,
-    "hardCap": true,
-    "perTaskLimit": 15
-  }
-}
-```
-
-## Requirements
-
-- pi >= 0.80.7
-- Git (for worktree isolation)
-- At least one pi-configured model (grok-4.5 recommended for write)
-
-**Optional CLI tools** (for model diversity in upgrade tier):
-
-| Tool | Install |
-|---|---|
-| Claude Code | `npm i -g @anthropic-ai/claude-code` |
-| Codex CLI | `npm i -g @openai/codex` |
-| Agy | `npm i -g agy` |
-| Kimi Code | `npm i -g @anthropic/kimi-code` |
+---
 
 ## License
 
