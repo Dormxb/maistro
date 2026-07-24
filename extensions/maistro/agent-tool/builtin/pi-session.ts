@@ -83,7 +83,7 @@ export class PiSessionTool implements AgentToolProvider {
 
     try {
       if (!this._mod) {
-        this._mod = await import(PI_ENTRY);
+        this._mod = await import(getPiEntry());
       }
       const runtime = await this._mod.ModelRuntime.create();
       this._runtime = runtime;
@@ -159,7 +159,7 @@ export class PiSessionTool implements AgentToolProvider {
     const [provider, modelId] = opts.model.split("/");
 
     if (!this._mod) {
-      this._mod = await import(PI_ENTRY);
+      this._mod = await import(getPiEntry());
     }
 
     // Re-use the session creation logic from agent-pool (will be refactored in P5.5).
