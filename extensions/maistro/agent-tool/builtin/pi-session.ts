@@ -5,9 +5,9 @@
  * The only tool with write capability. Fatal if no write model is healthy.
  */
 
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { platform } from "../../platform.ts";
 import type {
   AgentToolProvider,
   ExecuteOpts,
@@ -27,9 +27,7 @@ export function initPiEntry(ext: any): void {
     ext?.resolvePath?.("@earendil-works/pi-coding-agent") ||
     ext?.resolvePath?.("pi-coding-agent") ||
     (() => {
-      // Platform-aware fallback.
-      const { platform } = require("../platform.js") || {};
-      const home = platform?.().homeDir || process.env.USERPROFILE || process.env.HOME || "~";
+      const home = platform().homeDir;
       if (process.platform === "win32") {
         // Scoop / manual install locations on Windows
         const candidates = [
@@ -47,14 +45,13 @@ export function initPiEntry(ext: any): void {
 
 export function getPiEntry(): string {
   if (!_piEntry) {
-    // Lazy init if initPiEntry wasn't called (backward compat).
-    _piEntry = (() => {
-      const home = process.env.USERPROFILE || process.env.HOME || "";
-      if (process.platform === "win32") {
-        return `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
-      }
-      return `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
-    })();
+    // Lazy init if initPiEntry wasn't called.
+    const home = process.env.USERPROFILE || process.env.HOME || "";
+    if (process.platform === "win32") {
+      _piEntry = `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
+    } else {
+      _piEntry = `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`;
+    }
   }
   return _piEntry;
 }
