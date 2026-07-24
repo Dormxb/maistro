@@ -1,5 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { initPlatform } from "./platform.ts";
+import { initPiEntry } from "./agent-tool/builtin/pi-session.ts";
 import { AgentPool } from "./agent-pool.ts";
 import { loadConfig, getProjectRoot } from "./config.ts";
 import { assertBudgetAllows, sumMonthUsd } from "./ledger.ts";
@@ -23,6 +25,10 @@ import { buildStats, renderStatsText } from "./stats.ts";
 const writeSessions = new Map<string, WriteSession>();
 
 export default function (pi: ExtensionAPI) {
+  // P7: Initialize platform detection and pi module path BEFORE anything else.
+  initPlatform();
+  initPiEntry(pi);
+
   const cwd = getProjectRoot(process.cwd());
   let config = loadConfig(cwd);
   let pool = new AgentPool({ cwd, config });
