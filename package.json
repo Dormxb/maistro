@@ -8,7 +8,8 @@
     "url": "https://github.com/Dormxb/maistro"
   },
   "pi": {
-    "extensions": ["./extensions/maistro"]
+    "extensions": ["./extensions/maistro"],
+    "skills": ["./skills"]
   },
   "dependencies": {
     "typebox": "*"
