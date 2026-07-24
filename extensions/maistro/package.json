@@ -1,0 +1,15 @@
+{
+  "name": "maistro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "jiti": "^2.7.0",
+    "typebox": "^1.3.6"
+  }
+}
