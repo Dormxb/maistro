@@ -18,7 +18,7 @@ import type {
   ProviderClass,
 } from "../types.ts";
 
-// P7: pi module path — resolved from ExtensionAPI at startup, no hardcoded paths.
+// P7: pi module path — resolved from import.meta or common install locations.
 let _piEntry: string;
 
 function findExisting(candidates: string[]): string {
@@ -29,19 +29,21 @@ function findExisting(candidates: string[]): string {
   return candidates[0];
 }
 
-export function initPiEntry(ext: any): void {
-  // Pi ExtensionAPI may expose module resolution.
-  const fromApi =
-    ext?.resolvePath?.("@earendil-works/pi-coding-agent") ||
-    ext?.resolvePath?.("pi-coding-agent");
+export function initPiEntry(_ext?: any): void {
+  try {
+    // Best: Node.js 22+ resolves the package URL directly.
+    _piEntry = import.meta.resolve("@earendil-works/pi-coding-agent");
+    return;
+  } catch {}
 
+  // Fallback: probe common npm global install paths.
   const home = platform().homeDir;
   const candidates: string[] = [];
 
   if (process.platform === "win32") {
     candidates.push(
-      `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
       `file:///${home}/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
+      `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
     );
   } else {
     candidates.push(
@@ -51,28 +53,11 @@ export function initPiEntry(ext: any): void {
     );
   }
 
-  _piEntry = fromApi || findExisting(candidates);
+  _piEntry = findExisting(candidates);
 }
 
 export function getPiEntry(): string {
-  if (!_piEntry) {
-    // initPiEntry wasn't called — use lazy discovery.
-    const home = process.env.USERPROFILE || process.env.HOME || "";
-    const candidates: string[] = [];
-    if (process.platform === "win32") {
-      candidates.push(
-        `file:///${home}/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-        `file:///${home}/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-      );
-    } else {
-      candidates.push(
-        `file:///usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-        `file:///opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-        `file://${home}/.pi/agent/node_modules/@earendil-works/pi-coding-agent/dist/index.js`,
-      );
-    }
-    _piEntry = findExisting(candidates);
-  }
+  if (!_piEntry) initPiEntry();
   return _piEntry;
 }
 

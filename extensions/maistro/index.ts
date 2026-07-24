@@ -25,9 +25,9 @@ import { buildStats, renderStatsText } from "./stats.ts";
 const writeSessions = new Map<string, WriteSession>();
 
 export default function (pi: ExtensionAPI) {
-  // P7: Initialize platform detection and pi module path BEFORE anything else.
+  // P7: Initialize platform and pi module path before anything else.
   initPlatform();
-  initPiEntry(pi);
+  initPiEntry();
 
   const cwd = getProjectRoot(process.cwd());
   let config = loadConfig(cwd);
