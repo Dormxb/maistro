@@ -83,7 +83,46 @@ async function llmClassify(
   modelProvider: string,
   modelId: string,
 ): Promise<ClassifierResult> {
-  // Import pi entry dynamically.
+  // P9: Try pi-model-roles' completeWithRole for lightweight classification.
+  try {
+    const { getModelRolesAPI } = await import("@wuyaos/pi-model-roles");
+    const api = getModelRolesAPI();
+    if (api) {
+      const context = {
+        systemPrompt: [
+          "Classify the following coding task into one workflow.",
+          "Output ONLY a JSON object with:",
+          '  "workflow": "executor_only" | "architect_executor" | "full_pipeline" | "challenger_review"',
+          '  "reasoning": one-sentence explanation',
+          "",
+          "Rules:",
+          "- executor_only: single trivial file change, typo, comment, rename, format",
+          "- architect_executor: multi-file feature, CRUD, config changes, well-defined scope",
+          "- full_pipeline: architecture, design, system-level, refactor, auth, db schema, new service",
+          "- challenger_review: reviewing existing code, finding bugs, security audit",
+          "",
+          "Output only the JSON. No markdown. No extra text.",
+        ].join("\n"),
+        messages: [{ role: "user" as const, content: [{ type: "text" as const, text: `Task: ${goal}` }] }],
+      };
+      const result = await api.completeWithRole("utility", context);
+      const text = result.content?.map((c: any) => c.text).join("") || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          workflow: parsed.workflow || "architect_executor",
+          reasoning: parsed.reasoning || "model-roles classified",
+          modelStrategy: parsed.workflow === "full_pipeline" || parsed.workflow === "challenger_review"
+            ? "upgrade" : "baseline",
+        };
+      }
+    }
+  } catch {
+    // pi-model-roles not installed — fall through to legacy path.
+  }
+
+  // Legacy: manual pi session (heavy fallback).
   const piEntry = (await import("./builtin/pi-session.ts")).getPiEntry();
   const mod = await import(piEntry);
   const runtime = await mod.ModelRuntime.create();

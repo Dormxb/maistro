@@ -14,7 +14,8 @@ export interface AgentProfile {
   model: string;
   tools: ToolName[];
   thinking?: string;
-  tierPreference?: "baseline" | "upgrade" | "upgrade-required";
+  /** pi-model-roles role name for baseline model resolution. */
+  modelRole?: string;
 }
 
 export interface CostConfig {
@@ -29,17 +30,6 @@ export interface SecurityConfig {
   maxFileWriteBytes: number;
 }
 
-export interface RoutingConfig {
-  enabled: boolean;
-  preferUpgrade: boolean;
-  budgetAwareDowngrade: boolean;
-}
-
-export interface AgentToolsConfig {
-  stateCachePath: string;
-  providers: Record<string, { enabled: boolean; binary?: string | null }>;
-}
-
 export interface MaistroConfig {
   version: string;
   orchestrator: { provider: string; model: string };
@@ -50,9 +40,7 @@ export interface MaistroConfig {
     requiredChecksMin: number;
     hostProjectTestExecution: boolean;
   };
-  modes: Record<string, { enabled: boolean; confirmBeforeRun?: boolean; model?: string }>;
-  routing?: RoutingConfig;
-  agentTools?: AgentToolsConfig;
+  modes: Record<string, { enabled: boolean; confirmBeforeRun?: boolean }>;
   cost: CostConfig;
   security: SecurityConfig;
 }

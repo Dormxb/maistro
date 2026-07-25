@@ -759,6 +759,17 @@ export default function (pi: ExtensionAPI) {
     } catch (e) {
       console.error("[maistro] config load failed", e);
     }
+    // P9: Try to wire pi-model-roles integration.
+    try {
+      const { getModelRolesAPI } = await import("@wuyaos/pi-model-roles");
+      const api = getModelRolesAPI();
+      if (api) {
+        const { setModelRolesApi } = await import("./agent-tool/model-router.ts");
+        setModelRolesApi(api);
+      }
+    } catch {
+      // pi-model-roles not installed — graceful degradation.
+    }
   });
 
   pi.on("session_end", async () => {

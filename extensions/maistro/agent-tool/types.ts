@@ -91,6 +91,8 @@ export interface ExecuteOpts {
   cwd: string;
   writeSessionPath?: string;
   timeoutMs?: number;
+  /** Thinking level from pi-model-roles integration. */
+  thinking?: string;
 }
 
 export interface ExecuteResult {

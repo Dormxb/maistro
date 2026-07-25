@@ -28,6 +28,7 @@ import {
   KimiCliTool,
   getPiEntry,
 } from "./agent-tool/index.ts";
+import { setModelRolesApi } from "./agent-tool/model-router.ts";
 import type { ExecuteResult, RouteResult } from "./agent-tool/types.ts";
 import { recordCall } from "./token-stats.ts";
 
@@ -203,9 +204,10 @@ export class AgentPool {
 
     // Route.
     const tierPref = profile.tierPreference || (requireWrite ? "baseline" : "upgrade");
+    const modelRole = profile.modelRole;
     let route: RouteResult;
     try {
-      route = router.route(params.role, params.prompt, tierPref);
+      route = router.route(params.role, params.prompt, tierPref, modelRole);
     } catch (e: any) {
       throw new Error(`routing failed: ${e.message}`);
     }
@@ -289,6 +291,7 @@ export class AgentPool {
     registry: AgentToolRegistry,
   ): Promise<ExecuteResult> {
     // Build execute opts.
+    const thinking = this.router?.resolveThinking?.(params.role, (profile as any).modelRole);
     const execOpts = {
       role: params.role,
       prompt: params.prompt,
@@ -296,6 +299,7 @@ export class AgentPool {
       model: route.model,
       cwd: this.cwd,
       writeSessionPath: params.writeSession?.worktreePath,
+      thinking,
     };
 
     // First attempt.

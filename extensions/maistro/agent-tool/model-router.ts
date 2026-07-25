@@ -1,10 +1,9 @@
 /**
- * P5.3 ModelRouter
+ * P9 ModelRouter — integrated with pi-model-roles for baseline model resolution.
  *
- * Request-level model routing within a role.
- * Two pools: baseline (pi models, always available) and upgrade (CLI tools, optional).
- * Includes role-specific upgrade preferences to prevent Architect/Challenger same-model bias.
- * Budget-aware downgrade when monthly spend exceeds 80%.
+ * When pi-model-roles is installed and the role config has a `modelRole` mapping,
+ * baseline model selection uses pi-model-roles' explicit role→model binding
+ * instead of alphabetical ordering. Thinking level is also resolved from the role.
  */
 
 import type {
@@ -14,6 +13,14 @@ import type {
   RoutingPool,
 } from "./types.ts";
 import type { AgentToolRegistry } from "./registry.ts";
+
+// ── Optional pi-model-roles integration ──────────────────────────────
+
+let modelRolesApi: any = null;
+
+export function setModelRolesApi(api: any): void {
+  modelRolesApi = api;
+}
 
 // ── Config ────────────────────────────────────────────────────────────
 
@@ -26,22 +33,10 @@ export interface RouterConfig {
 
 // ── Role-level upgrade preferences ────────────────────────────────────
 
-/**
- * Per-role ordered list of preferred CLI tool IDs for upgrade pool.
- * Architect prefers Claude (Fable 5 for design); Challenger prefers Codex (Sol for adversarial review).
- * This prevents both roles from defaulting to the same model and losing adversarial independence.
- */
 const ROLE_UPGRADE_PREFS: Record<string, string[]> = {
   architect: ["claude-cli", "codex-cli", "agy-cli", "kimi-cli"],
   challenger: ["codex-cli", "agy-cli", "kimi-cli", "claude-cli"],
-  // Executor never uses upgrade (CLI all read-only).
 };
-
-/** Baseline model sort: write-capable first, then alphabetically by provider. */
-function baselineSort(a: { key: string; write: boolean }, b: { key: string; write: boolean }): number {
-  if (a.write !== b.write) return a.write ? -1 : 1;
-  return a.key.localeCompare(b.key);
-}
 
 // ── ModelRouter ───────────────────────────────────────────────────────
 
@@ -59,28 +54,18 @@ export class ModelRouter {
       monthlySpent: config.monthlySpent ?? 0,
     };
 
-    // Subscribe to registry changes — rebuild route table on any status change.
-    this.registry.onChange(() => {
-      // Route table is computed lazily per-request, so no explicit rebuild needed.
-      // This handler exists for future caching if needed.
-    });
+    this.registry.onChange(() => {});
   }
 
   updateBudget(monthlySpent: number): void {
     this.config.monthlySpent = monthlySpent;
   }
 
-  /**
-   * Route a request to the best available model.
-   *
-   * @param role      — architect | executor | challenger
-   * @param prompt    — the user prompt (for future complexity classification)
-   * @param tierPref  — "baseline" | "upgrade" | "upgrade-required"
-   */
   route(
     role: string,
     prompt: string,
     tierPref: string = "upgrade",
+    modelRole?: string,
   ): RouteResult {
     const core = this.registry.getTool("pi-session");
     const requireWrite = role === "executor";
@@ -90,8 +75,7 @@ export class ModelRouter {
       if (!core || (core.status !== "healthy" && core.status !== "degraded")) {
         throw new Error("FATAL: no healthy pi-session for executor (write required)");
       }
-      // Pick the best write model from core.
-      const model = this.pickBestCoreModel(core, { requireWrite: true });
+      const model = this.pickBestCoreModel(core, { requireWrite: true, role, modelRole });
       return { tool: core, model, pool: "baseline" };
     }
 
@@ -108,25 +92,20 @@ export class ModelRouter {
       for (const toolId of prefs) {
         const tool = healthyEnhancements.find((t) => t.id === toolId);
         if (tool && tool.models.length > 0) {
-          const model = tool.models[0]; // first model is the default/best
           return {
             tool,
-            model: this.resolveModelName(tool, model),
+            model: tool.models[0],
             pool: "upgrade",
           };
         }
       }
 
-      // No healthy CLI — fallback to baseline.
       if (strictUpgrade) {
-        // upgrade-required: fail rather than silently downgrade.
         const unavailable = prefs.map((id) => {
           const t = this.registry.getTool(id);
           return t ? `${t.id}=${t.status}` : `${id}=not_registered`;
         }).join(", ");
-        throw new Error(
-          `upgrade-required: no healthy CLI tool available. Status: ${unavailable}`,
-        );
+        throw new Error(`upgrade-required: no healthy CLI tool. Status: ${unavailable}`);
       }
     }
 
@@ -135,36 +114,60 @@ export class ModelRouter {
       throw new Error("FATAL: pi-session unavailable");
     }
 
-    const model = this.pickBestCoreModel(core, { requireWrite: false });
+    const model = this.pickBestCoreModel(core, { requireWrite: false, role, modelRole });
     const downgradeReason: DowngradeReason | undefined = forceBaseline
-      ? {
-          from: "upgrade",
-          to: "baseline",
-          reason: `budget ${Math.round(budgetRatio * 100)}% spent, upgrade disabled`,
-        }
+      ? { from: "upgrade", to: "baseline", reason: `budget ${Math.round(budgetRatio * 100)}% spent` }
       : tierPref === "upgrade" || tierPref === "upgrade-required"
-        ? {
-            from: "upgrade",
-            to: "baseline",
-            reason: "no healthy CLI tools available",
-          }
+        ? { from: "upgrade", to: "baseline", reason: "no healthy CLI tools available" }
         : undefined;
 
-    return {
-      tool: core,
-      model,
-      pool: "baseline",
-      downgraded: downgradeReason,
-    };
+    return { tool: core, model, pool: "baseline", downgraded: downgradeReason };
+  }
+
+  /**
+   * P9: Resolve thinking level from pi-model-roles if available.
+   * Returns undefined if model-roles is not installed or role has no thinking config.
+   */
+  resolveThinking(role: string, modelRole?: string): string | undefined {
+    if (!modelRolesApi) return undefined;
+    try {
+      const roleName = modelRole || role;
+      const config = modelRolesApi.getRole(roleName);
+      return config?.thinking;
+    } catch {
+      return undefined;
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
 
-  /** Pick the best available core model. */
+  /** Pick the best available core model. P9: uses pi-model-roles if available. */
   private pickBestCoreModel(
     core: AgentToolProvider,
-    opts: { requireWrite: boolean },
+    opts: { requireWrite: boolean; role: string; modelRole?: string },
   ): string {
+    // Try pi-model-roles resolution first.
+    if (modelRolesApi && core.modelStates && core.modelStates.size > 0) {
+      try {
+        const roleName = opts.modelRole || opts.role;
+        const resolved = modelRolesApi.resolveRole(roleName);
+        if (resolved?.model) {
+          const key = `${resolved.model.provider}/${resolved.model.id}`;
+          const ms = core.modelStates.get(key);
+          if (ms && (ms.status === "healthy" || ms.status === "degraded")) {
+            if (opts.requireWrite && ms.status !== "healthy") {
+              // Write requires healthy model — fall through to alphabetical.
+            } else {
+              return key;
+            }
+          }
+        }
+      } catch {
+        // pi-model-roles not installed or role not found — fall through.
+      }
+    }
+
+    // Fallback: alphabetical with healthy-first.
     if (!core.modelStates || core.modelStates.size === 0) {
       return core.models[0] || "unknown";
     }
@@ -176,27 +179,15 @@ export class ModelRouter {
         }
         return ms.status === "healthy" || ms.status === "degraded";
       })
-      .map(([key, ms]) => ({
-        key,
-        write: opts.requireWrite,
-        healthy: ms.status === "healthy",
-      }));
+      .map(([key, ms]) => ({ key, healthy: ms.status === "healthy" }));
 
-    if (entries.length === 0) {
-      throw new Error("no healthy core model available");
-    }
+    if (entries.length === 0) throw new Error("no healthy core model available");
 
-    // Prefer healthy over degraded, then alphabetical.
     entries.sort((a, b) => {
       if (a.healthy !== b.healthy) return a.healthy ? -1 : 1;
       return a.key.localeCompare(b.key);
     });
 
     return entries[0].key;
-  }
-
-  /** Resolve a model name — for CLI tools, map to the CLI model flag. */
-  private resolveModelName(tool: AgentToolProvider, model: string): string {
-    return model;
   }
 }
