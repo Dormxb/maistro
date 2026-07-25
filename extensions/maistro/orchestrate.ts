@@ -15,6 +15,7 @@ import {
 import { assertBudgetAllows } from "./ledger.ts";
 import { isQuotaOrAuthFailure, loadVerificationResult } from "./manual-verify.ts";
 import { loadMeta, saveMeta, type TaskRecord } from "./task-journal.ts";
+import { sync as cgSync } from "./codegraph.ts";
 
 export interface OrchestrateInput {
   taskId: string;
@@ -269,6 +270,9 @@ export async function runTriadPipeline(
       );
     }
     touchMeta({ taskId: input.taskId, state: "static_passed", fixRound });
+
+    // P11: Keep CodeGraph index fresh after Executor changes.
+    try { cgSync(writeSession.worktreePath); } catch { /* best effort */ }
 
     lastDiff = getUnifiedDiff(writeSession.worktreePath, writeSession.baseCommit);
     const handoffPkg: CodexHandoffPackage = {

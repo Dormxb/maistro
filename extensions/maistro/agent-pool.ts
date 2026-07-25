@@ -31,6 +31,7 @@ import {
 import { setModelRolesApi } from "./agent-tool/model-router.ts";
 import type { ExecuteResult, RouteResult } from "./agent-tool/types.ts";
 import { recordCall } from "./token-stats.ts";
+import { query as cgQuery, explore as cgExplore, getStatus as cgStatus } from "./codegraph.ts";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -212,8 +213,12 @@ export class AgentPool {
       throw new Error(`routing failed: ${e.message}`);
     }
 
+    // ── P11: CodeGraph context injection ──────────────────────────
+    const cgContext = this.buildCodeGraphContext(params.role, params.prompt);
+    const enhancedPrompt = cgContext ? `${systemPrompt}\n\n--- CODEGRAPH CONTEXT ---\n${cgContext}` : systemPrompt;
+
     // Execute (with retry on upgrade→baseline fallback).
-    const result = await this.executeWithRetry(route, params, systemPrompt, registry);
+    const result = await this.executeWithRetry(route, params, enhancedPrompt, registry);
 
     if (!result.success) {
       throw result.error || new Error("agent call failed");
@@ -470,5 +475,82 @@ export class AgentPool {
       this.registry.dispose();
     }
     this.sessions.clear();
+  }
+
+  // ── P11: CodeGraph organic context injection ────────────────────
+
+  /**
+   * Build CodeGraph context to inject into agent prompts.
+   * Architect gets symbol exploration, Executor gets existing symbol checks.
+   * Limited to ~400 tokens max to stay under budget.
+   */
+  private buildCodeGraphContext(role: string, prompt: string): string {
+    try {
+      const status = cgStatus(this.cwd);
+      if (!status.installed || !status.initialized) return "";
+
+      const keywords = this.extractKeywords(prompt);
+      if (keywords.length === 0) return "";
+
+      if (role === "architect") {
+        // Explore top 3 keywords for architectural understanding.
+        const results: string[] = [];
+        for (const kw of keywords.slice(0, 3)) {
+          const symbols = cgQuery(kw, this.cwd);
+          if (symbols.length === 0) continue;
+          const top = symbols.slice(0, 5).map((s) =>
+            `${s.kind} ${s.name} → ${s.file}`
+          ).join("\n");
+          if (top) results.push(`Symbols matching "${kw}":\n${top}`);
+        }
+        if (results.length === 0) return "";
+        return results.join("\n\n");
+      }
+
+      if (role === "executor") {
+        // Check if target symbols already exist.
+        const existing = keywords.flatMap((kw) => cgQuery(kw, this.cwd).slice(0, 3));
+        if (existing.length === 0) return "";
+        const lines = existing.map((s) =>
+          `${s.kind} ${s.name} exists at ${s.file}:${s.line || 1}`
+        );
+        return `Existing symbols (avoid conflicts):\n${lines.join("\n")}`;
+      }
+
+      if (role === "challenger") {
+        // Impact analysis on key symbols.
+        const { impact: cgImpact } = require("./codegraph.ts");
+        const lines: string[] = [];
+        for (const kw of keywords.slice(0, 2)) {
+          const result = cgImpact(kw, this.cwd);
+          if (result) lines.push(result.split("\n").slice(0, 8).join("\n"));
+        }
+        return lines.join("\n\n");
+      }
+    } catch {
+      // CodeGraph unavailable — silent degrade.
+    }
+    return "";
+  }
+
+  /** Extract meaningful keywords from a prompt. */
+  private extractKeywords(prompt: string): string[] {
+    // Simple heuristic: capitalised identifiers, file paths, quoted strings.
+    const keywords: string[] = [];
+
+    // Quoted strings.
+    const quoted = prompt.match(/"([^"]+)"/g);
+    if (quoted) keywords.push(...quoted.map((s) => s.replace(/"/g, "")));
+
+    // File paths.
+    const files = prompt.match(/[\w./-]+\.\w{2,4}/g);
+    if (files) keywords.push(...files);
+
+    // Capitalised identifiers (likely class/interface names).
+    const idents = prompt.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g);
+    if (idents) keywords.push(...idents);
+
+    // Deduplicate, limit.
+    return [...new Set(keywords)].slice(0, 5);
   }
 }
