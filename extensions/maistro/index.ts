@@ -21,6 +21,7 @@ import { appendMemory, listMemory, searchMemory } from "./memory.ts";
 import { buildStats, renderStatsText } from "./stats.ts";
 import { loadAllRecords, renderSummaryText, sessionRecords } from "./token-stats.ts";
 import { addTodo, updateTodo, listTodos, renderWidget } from "./todo.ts";
+import { doctorLine, getStatus, query as codegraphQuery, callers as codegraphCallers, impact as codegraphImpact, sync as codegraphSync } from "./codegraph.ts";
 
 const writeSessions = new Map<string, WriteSession>();
 
@@ -157,6 +158,7 @@ export default function (pi: ExtensionAPI) {
           `- codex: ${resolveCodexBin() || "NOT FOUND"}`,
           `- verification.authority: ${config.verification.authority}`,
           `- modes: classifier=${config.modes.classifier?.enabled ?? config.modes.router?.enabled} review=${config.modes.review?.enabled} pipeline=${config.modes.pipeline?.enabled} debate=${config.modes.debate?.enabled}`,
+          `- ${doctorLine(cwd)}`,
         ];
         if (toolStatus.length > 0) {
           lines.push("- agent tools:", ...toolStatus);
@@ -682,6 +684,45 @@ export default function (pi: ExtensionAPI) {
           },
         ],
       };
+    },
+  });
+
+  // P10: CodeGraph knowledge graph tools.
+  pi.registerTool({
+    name: "maistro_codegraph_status",
+    label: "Maistro CodeGraph Status",
+    description: "Check CodeGraph index status — files, symbols, edges, whether index is up to date. Use before large refactors to confirm code intelligence is fresh.",
+    parameters: Type.Object({}),
+    async execute() {
+      const s = getStatus(cwd);
+      const lines = [
+        `CodeGraph: ${s.installed ? "installed" : "NOT INSTALLED"}`,
+        s.initialized
+          ? `Index: ${s.files} files, ${s.nodes} symbols, ${s.edges} edges, ${s.dbSize}`
+          : "Index: not initialized",
+        `Status: ${s.upToDate ? "up to date ✅" : "stale ⚠️"}`,
+      ];
+      if (s.suggestion) lines.push(`Suggestion: ${s.suggestion}`);
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    },
+  });
+
+  pi.registerTool({
+    name: "maistro_codegraph_search",
+    label: "Maistro CodeGraph Search",
+    description: "Search CodeGraph for symbols in the codebase. Returns kind, name, file location. Use BEFORE designing or modifying code to understand existing structure.",
+    parameters: Type.Object({
+      symbol: Type.String({ description: "Symbol name to search for (e.g. 'AgentPool', 'route', 'Pipeline')" }),
+    }),
+    async execute(_id, params) {
+      const results = codegraphQuery(params.symbol, cwd);
+      if (results.length === 0) {
+        return { content: [{ type: "text", text: `No symbols found for "${params.symbol}"` }] };
+      }
+      const lines = results.map((r) =>
+        `${r.kind}: ${r.name} → ${r.file}${r.line ? `:${r.line}` : ""}${r.signature ? ` ${r.signature}` : ""}`
+      );
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     },
   });
 
