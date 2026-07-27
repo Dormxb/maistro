@@ -26,6 +26,7 @@ import {
   CodexCliTool,
   AgyCliTool,
   KimiCliTool,
+  GrokCliTool,
   getPiEntry,
 } from "./agent-tool/index.ts";
 import { setModelRolesApi } from "./agent-tool/model-router.ts";
@@ -140,6 +141,7 @@ export class AgentPool {
     this.registry.register(new CodexCliTool());
     this.registry.register(new AgyCliTool());
     this.registry.register(new KimiCliTool());
+    this.registry.register(new GrokCliTool());
 
     await this.registry.init();
 
