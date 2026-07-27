@@ -3,11 +3,15 @@
  *
  * Wraps pi ModelRuntime to auto-discover all configured models.
  * The only tool with write capability. Fatal if no write model is healthy.
+ *
+ * P7: Cross-platform pi module resolution — import.meta.resolve → npm root -g → common paths.
  */
 
 import { existsSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { platform } from "../../platform.ts";
 import type {
   AgentToolProvider,
   ExecuteOpts,
@@ -17,12 +21,50 @@ import type {
   ProviderClass,
 } from "../types.ts";
 
-// Centralised pi entry — single source of truth for the pi module path.
-const PI_ENTRY =
-  "file:///D:/Tools/Scoop/apps/nvm-windows/current/nodejs/nodejs/node_modules/@earendil-works/pi-coding-agent/dist/index.js";
+// ── Cross-platform pi module path ────────────────────────────────────
+
+let _piEntry: string;
+
+export function initPiEntry(_ext?: any): void {
+  // 1. import.meta.resolve (Node 22+).
+  try {
+    _piEntry = import.meta.resolve("@earendil-works/pi-coding-agent");
+    if (_piEntry) return;
+  } catch {}
+
+  // 2. npm root -g (any install method).
+  try {
+    const root = execSync("npm root -g", { encoding: "utf8", timeout: 5000 }).trim();
+    const path = join(root, "@earendil-works/pi-coding-agent", "dist", "index.js");
+    if (existsSync(path)) { _piEntry = `file://${path}`; return; }
+  } catch {}
+
+  // 3. Common paths by OS.
+  const home = platform().homeDir;
+  const candidates = process.platform === "win32"
+    ? [
+        join(home, "AppData", "Roaming", "npm", "node_modules", "@earendil-works/pi-coding-agent", "dist", "index.js"),
+        join(home, "Tools", "Scoop", "apps", "nvm-windows", "current", "nodejs", "nodejs", "node_modules", "@earendil-works/pi-coding-agent", "dist", "index.js"),
+      ]
+    : [
+        "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+        "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+        join(home, ".pi", "agent", "node_modules", "@earendil-works/pi-coding-agent", "dist", "index.js"),
+      ];
+
+  for (const p of candidates) {
+    if (existsSync(p)) { _piEntry = `file://${p}`; return; }
+  }
+
+  _piEntry = "";
+}
 
 export function getPiEntry(): string {
-  return PI_ENTRY;
+  if (!_piEntry) initPiEntry();
+  if (!_piEntry) throw new Error(
+    "Cannot find pi module. Ensure @earendil-works/pi-coding-agent is installed."
+  );
+  return _piEntry;
 }
 
 // ── PiSessionTool ────────────────────────────────────────────────────
@@ -47,7 +89,7 @@ export class PiSessionTool implements AgentToolProvider {
 
     try {
       if (!this._mod) {
-        this._mod = await import(PI_ENTRY);
+        this._mod = await import(getPiEntry());
       }
       const runtime = await this._mod.ModelRuntime.create();
       this._runtime = runtime;
@@ -123,7 +165,7 @@ export class PiSessionTool implements AgentToolProvider {
     const [provider, modelId] = opts.model.split("/");
 
     if (!this._mod) {
-      this._mod = await import(PI_ENTRY);
+      this._mod = await import(getPiEntry());
     }
 
     // Re-use the session creation logic from agent-pool (will be refactored in P5.5).

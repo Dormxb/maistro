@@ -7,9 +7,9 @@
 
 import { execFile } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { platform } from "../../platform.ts";
 import type {
   AgentToolProvider,
   ExecuteOpts,
@@ -200,8 +200,7 @@ export class ClaudeCliTool extends CliTool {
   models = ["claude-fable-5", "claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"];
 
   protected binaryCandidates = [
-    join(homedir(), ".local", "bin", "claude.exe"),
-    "C:\\Users\\JMAAT001\\.local\\bin\\claude.exe",
+    join(platform().homeDir, ".local", "bin", `claude${platform().binExt}`),
     "claude",
   ];
 
@@ -244,7 +243,7 @@ export class CodexCliTool extends CliTool {
   models = ["gpt-5.6-sol", "gpt-5", "gpt-5-fast"];
 
   protected binaryCandidates = [
-    "C:\\Users\\JMAAT001\\AppData\\Local\\OpenAI\\Codex\\bin\\codex.exe",
+    ...platform().defaultPaths.codex,
     "codex",
   ];
 
@@ -286,7 +285,9 @@ export class AgyCliTool extends CliTool {
   label = "Agy CLI";
   models = ["antigravity-default"];
 
-  protected binaryCandidates = ["agy"];
+  protected binaryCandidates = [
+    ...platform().defaultPaths.agy,
+  ];
 
   protected async run(
     bin: string,
@@ -306,10 +307,6 @@ export class AgyCliTool extends CliTool {
 
 // ── KimiCliTool ───────────────────────────────────────────────────────
 
-function windowsHome(): string {
-  return process.env.USERPROFILE || process.env.HOME || homedir();
-}
-
 export class KimiCliTool extends CliTool {
   id = "kimi-cli";
   provider = "moonshot";
@@ -317,9 +314,7 @@ export class KimiCliTool extends CliTool {
   models = ["kimi-default"];
 
   protected binaryCandidates = [
-    join(windowsHome(), ".kimi-code", "bin", "kimi.exe"),
-    join(windowsHome(), ".kimi-code", "kimi.exe"),
-    "C:\\Users\\JMAAT001\\.kimi-code\\bin\\kimi.exe",
+    ...platform().defaultPaths.kimi,
     "kimi-code",
     "kimi",
   ];

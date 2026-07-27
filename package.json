@@ -1,6 +1,6 @@
 {
   "name": "@simplesiong/maistro",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Multi-model collaborative coding & review for pi — Architect → Executor → Codex → Challenger",
   "keywords": ["pi-package", "multi-agent", "code-review", "maistro"],
   "license": "MIT",
