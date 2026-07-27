@@ -27,6 +27,8 @@ import {
   AgyCliTool,
   KimiCliTool,
   GrokCliTool,
+  GeminiCliTool,
+  QwenCliTool,
   getPiEntry,
 } from "./agent-tool/index.ts";
 import { setModelRolesApi } from "./agent-tool/model-router.ts";
@@ -142,6 +144,8 @@ export class AgentPool {
     this.registry.register(new AgyCliTool());
     this.registry.register(new KimiCliTool());
     this.registry.register(new GrokCliTool());
+    this.registry.register(new GeminiCliTool());
+    this.registry.register(new QwenCliTool());
 
     await this.registry.init();
 

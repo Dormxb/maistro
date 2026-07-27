@@ -363,6 +363,44 @@ export class GrokCliTool extends CliTool {
   }
 }
 
+// ── GeminiCliTool ──────────────────────────────────────────────────────
+
+export class GeminiCliTool extends CliTool {
+  id = "gemini-cli";
+  provider = "google";
+  label = "Gemini CLI";
+  models = ["gemini-default"];
+
+  protected binaryCandidates = [...platform().defaultPaths.gemini];
+
+  protected async run(bin: string, opts: ExecuteOpts): Promise<{ stdout: string; stderr: string }> {
+    const full = `${opts.systemPrompt || ""}\n\n---\n\n${opts.prompt}`;
+    const { stdout, stderr } = await execFileAsync(bin, ["-p", full], {
+      cwd: opts.cwd, timeout: opts.timeoutMs ?? 600_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true, shell: false,
+    });
+    return { stdout, stderr };
+  }
+}
+
+// ── QwenCliTool ────────────────────────────────────────────────────────
+
+export class QwenCliTool extends CliTool {
+  id = "qwen-cli";
+  provider = "alibaba";
+  label = "Qwen CLI";
+  models = ["qwen-default"];
+
+  protected binaryCandidates = [...platform().defaultPaths.qwen];
+
+  protected async run(bin: string, opts: ExecuteOpts): Promise<{ stdout: string; stderr: string }> {
+    const full = `${opts.systemPrompt || ""}\n\n---\n\n${opts.prompt}`;
+    const { stdout, stderr } = await execFileAsync(bin, ["-p", full], {
+      cwd: opts.cwd, timeout: opts.timeoutMs ?? 600_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true, shell: false,
+    });
+    return { stdout, stderr };
+  }
+}
+
 // ── Factory ───────────────────────────────────────────────────────────
 
 /** Create all built-in AgentTool instances. */
@@ -374,5 +412,7 @@ export function createAllTools(): AgentToolProvider[] {
     new AgyCliTool(),
     new KimiCliTool(),
     new GrokCliTool(),
+    new GeminiCliTool(),
+    new QwenCliTool(),
   ];
 }
