@@ -23,6 +23,7 @@ export interface PlatformAdapter {
     codex: string[];
     agy: string[];
     kimi: string[];
+    grok: string[];
   };
   which(name: string): Promise<string | undefined>;
 }
@@ -60,6 +61,7 @@ export function detectPlatform(): PlatformAdapter {
         codex: ["/usr/local/bin/codex", join(home, ".local", "bin", "codex")],
         agy: ["agy"],
         kimi: [join(home, ".kimi-code", "bin", "kimi")],
+        grok: ["grok"],
       },
       which: unixWhich,
     };
@@ -73,6 +75,7 @@ export function detectPlatform(): PlatformAdapter {
         codex: [join(home, ".local", "bin", "codex"), "/usr/local/bin/codex"],
         agy: ["agy"],
         kimi: [join(home, ".kimi-code", "bin", "kimi")],
+        grok: ["grok"],
       },
       which: unixWhich,
     };
